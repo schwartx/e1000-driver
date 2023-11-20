@@ -82,9 +82,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         // Exercise3 Checkpoint 1
         // 分配tx_ring和rx_ring的内存空间并返回dma虚拟地址和物理地址
-        // let (tx_ring_vaddr, tx_ring_dma) = ?
-        // let (rx_ring_vaddr, rx_ring_dma) = ?
-
+        let (tx_ring_vaddr, tx_ring_dma) = kfn.dma_alloc_coherent(alloc_tx_ring_pages);
+        let (rx_ring_vaddr, rx_ring_dma) = kfn.dma_alloc_coherent(alloc_rx_ring_pages);
 
         let tx_ring = unsafe { from_raw_parts_mut(tx_ring_vaddr as *mut TxDesc, TX_RING_SIZE) };
         let rx_ring = unsafe { from_raw_parts_mut(rx_ring_vaddr as *mut RxDesc, RX_RING_SIZE) };
@@ -115,8 +114,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         // Exercise3 Checkpoint 2
         // 分配tx_buffer和rx_buffer的内存空间 并返回dma虚拟地址和物理地址
-        // let (mut tx_mbufs_vaddr, mut tx_mbufs_dma) = ?;
-        // let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = ?;
+        let (mut tx_mbufs_vaddr, mut tx_mbufs_dma) = kfn.dma_alloc_coherent(alloc_tx_buffer_pages);
+        let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = kfn.dma_alloc_coherent(alloc_rx_buffer_pages);
 
         
 
@@ -200,17 +199,20 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         fence_w();
 
         // [E1000 14.5] Transmit initialization
-        if (self.tx_ring.len() * size_of::<TxDesc>()) % 128 != 0 {
+        // 传输描述符数组的总长度（以字节为单位）
+        let tdlen = self.tx_ring.len() * size_of::<TxDesc>();
+        if tdlen % 128 != 0 {
             //panic("e1000");
             error!("e1000, size of tx_ring is invalid");
         }
 
         // Exercise3 Checkpoint 3
         // set tx descriptor base address and tx ring length
-        // self.regs[??].write(??);
-        // self.regs[??].write(??);
-
-
+        // 将计算出的传输描述符数组长度写入网络接口卡的E1000_TDLEN寄存器
+        self.regs[E1000_TDLEN].write(tdlen as u32);
+        // 分成高32位和低32位，并分别写入E1000_TDBAH（传输描述符基地址高）和E1000_TDBAL（传输描述符基地址低）寄存器
+        self.regs[E1000_TDBAH].write((self.tx_ring_dma >> 32) as u32);
+        self.regs[E1000_TDBAL].write((tdba & 0x00000000ffffffff) as u32);
 
 
         self.regs[E1000_TDT].write(0);
