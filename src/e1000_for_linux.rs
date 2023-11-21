@@ -238,6 +238,17 @@ impl net::DeviceOperations for E1000Driver {
         // step2 request_irq
         // step3 set up irq_handler
 
+        let irq_data = Box::try_new(IrqData {
+            dev_e1000: data.dev_e1000.clone(),
+            res: data.res.clone(),
+            napi: data.napi.clone(),
+        })
+        .unwrap();
+
+        let irq =
+            irq::Registration::try_new(data.irq, irq_data, irq::flags::SHARED, fmt!("e1000"))
+                .unwrap();
+        data.irq_handler.store(Box::into_raw(Box::try_new(irq).unwrap()), Ordering::Relaxed);
 
         // Enable NAPI scheduling
         data.napi.enable();
@@ -275,7 +286,9 @@ impl net::DeviceOperations for E1000Driver {
         data: <Self::Data as PointerWrapper>::Borrowed<'_>,
     ) -> NetdevTx {
         pr_info!("start xmit\n");
+        // TODO
         // Exercise4 Checkpoint 2
+        net::NetdevTx::Ok
     }
 
     /// Corresponds to `ndo_get_stats64` in `struct net_device_ops`.

@@ -1,3 +1,12 @@
 /target
 /Cargo.lock
 src/e1000_for_linux.d
+src/*.cmd
+src/Module.symvers
+src/*.d
+src/*.ko
+src/*.mod
+src/*.mod.c
+src/*.mod.o
+src/modules.order
+src/rust-project.json

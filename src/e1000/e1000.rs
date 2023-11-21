@@ -212,21 +212,23 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_TDLEN].write(tdlen as u32);
         // 分成高32位和低32位，并分别写入E1000_TDBAH（传输描述符基地址高）和E1000_TDBAL（传输描述符基地址低）寄存器
         self.regs[E1000_TDBAH].write((self.tx_ring_dma >> 32) as u32);
-        self.regs[E1000_TDBAL].write((tdba & 0x00000000ffffffff) as u32);
+        self.regs[E1000_TDBAL].write((self.tx_ring_dma & 0x00000000ffffffff) as u32);
 
 
         self.regs[E1000_TDT].write(0);
         self.regs[E1000_TDH].write(0);
 
         // [E1000 14.4] Receive initialization
-        if (self.rx_ring.len() * size_of::<RxDesc>()) % 128 != 0 {
+        let rdlen = self.rx_ring.len() * size_of::<RxDesc>();
+        if (rdlen) % 128 != 0 {
             error!("e1000, size of rx_ring is invalid");
         }
 
         // Exercise3 Checkpoint 4
         // set rx descriptor base address and rx ring length
-        // self.regs[??].write(??);
-        // self.regs[??].write(??);
+        self.regs[E1000_RDLEN].write(rdlen as u32);
+        self.regs[E1000_RDBAH].write((self.rx_ring_dma >> 32) as u32);
+        self.regs[E1000_RDBAL].write((self.rx_ring_dma & 0x00000000ffffffff) as u32);
 
         self.regs[E1000_RDH].write(0);
         self.regs[E1000_RDT].write((RX_RING_SIZE - 1) as u32);
