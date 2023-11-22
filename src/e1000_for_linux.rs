@@ -77,6 +77,45 @@ struct E1000Driver;
 
 impl E1000Driver {
     fn handle_rx_irq(dev: &net::Device, napi: &Napi, data: &NetData) {  
+        let mut dev_e1k = data.dev_e1000.lock_irqdisable();
+        let e1k_fn = dev_e1k.as_mut().unwrap();
+        let packets = e1k_fn.e1000_recv();
+        if packets.is_none() {
+            return
+        }
+        let packets: Vec<Vec<u8>> = packets.unwrap();
+
+        let mut pkts_compl = 0;
+        let mut bytes_compl = 0;
+
+        for packet in packets.as_slice() {
+            let skb = dev.alloc_skb_ip_align(RXBUFFER).unwrap();
+            let mut packet_len = packet.len();
+            let buf = unsafe { from_raw_parts_mut(skb.head_data().as_ptr() as *mut u8, packet_len) };
+            buf.copy_from_slice(packet);
+
+            // 减去4字节的以太网CRC
+            packet_len -= 4;
+            skb.put(packet_len as u32);
+            let protocol = skb.eth_type_trans(&napi.dev_get());
+            skb.protocol_set(protocol);
+
+            // 将数据包传递给上层协议栈进行进一步处理
+            napi.gro_receive(&skb);
+
+            pkts_compl += 1;
+            bytes_compl += packet_len;
+        }
+
+        // 更新统计数据
+        data
+            .stats
+            .rx_bytes
+            .fetch_add(bytes_compl as u64, Ordering::Relaxed);
+        data
+            .stats
+            .rx_packets
+            .fetch_add(pkts_compl as u64, Ordering::Relaxed);
         // Exercise4 Checkpoint 1
     }
 
@@ -286,7 +325,17 @@ impl net::DeviceOperations for E1000Driver {
         data: <Self::Data as PointerWrapper>::Borrowed<'_>,
     ) -> NetdevTx {
         pr_info!("start xmit\n");
-        // TODO
+        // 确保数据包至少有以太网最小长度大小
+        skb.put_padto(bindings::ETH_ZLEN);
+
+        let mut dev_e1k = data.dev_e1000.lock_irqdisable();
+        let e1k_fn = dev_e1k.as_mut().unwrap();
+
+        e1k_fn.e1000_transmit(skb.head_data());
+
+        // 更新网络设备的发送队列统计信息
+        dev.sent_queue(skb.len());
+
         // Exercise4 Checkpoint 2
         net::NetdevTx::Ok
     }

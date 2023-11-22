@@ -10,3 +10,4 @@ src/*.mod.c
 src/*.mod.o
 src/modules.order
 src/rust-project.json
+src/*.o
