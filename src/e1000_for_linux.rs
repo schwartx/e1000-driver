@@ -94,8 +94,6 @@ impl E1000Driver {
             let buf = unsafe { from_raw_parts_mut(skb.head_data().as_ptr() as *mut u8, packet_len) };
             buf.copy_from_slice(packet);
 
-            // 减去4字节的以太网CRC
-            packet_len -= 4;
             skb.put(packet_len as u32);
             let protocol = skb.eth_type_trans(&napi.dev_get());
             skb.protocol_set(protocol);
@@ -333,8 +331,8 @@ impl net::DeviceOperations for E1000Driver {
 
         e1k_fn.e1000_transmit(skb.head_data());
 
-        // 更新网络设备的发送队列统计信息
         dev.sent_queue(skb.len());
+        dev.completed_queue(1, skb.len() as u32);
 
         // Exercise4 Checkpoint 2
         net::NetdevTx::Ok
